@@ -14,12 +14,9 @@ class MyStrategy:
 
     #static
     top = None
-    field_div = None
 
     #local
     partner = None
-    cur_loop = 0
-    looks_on_aim = False
 
     def move(self, me, world, game, move):
         """
@@ -33,11 +30,6 @@ class MyStrategy:
 
         if MyStrategy.top is None:
             MyStrategy.top = me.id
-
-        MyStrategy.field_div = (world.get_my_player().net_front - world.get_opponent_player().net_front - 100) / 10
-        MyStrategy.div_mult = -1 if world.get_my_player().net_front > world.get_opponent_player().net_front else 1
-        MyStrategy.field_div *= MyStrategy.div_mult
-
 
 
         if self.partner is None:
@@ -54,11 +46,19 @@ class MyStrategy:
                 self.getPuck(me, world, game, move)
                 return
 
-            myAimY = game.goal_net_top
-            myAimX = (world.get_my_player().net_front + (50* MyStrategy.div_mult)) + (MyStrategy.field_div * self.cur_loop)
-            # logging.warning("x:{}".format(myAimX))
-            if self.getToHitPosition(me, world, game, move, myAimX, myAimY):
-                self.strikeNet(me, world, game, move)
+        if self.getToHitPosition(me, world, game, move):
+
+            if MyStrategy.top == me.id:
+                if world.puck.owner_hockeyist_id == me.id:
+                    if self.lookPartner(me, world, game, move) < pi/180:
+                        move.action = ActionType.PASS
+            else:
+                if world.puck.owner_hockeyist_id == me.id:
+                    self.strikeNet(me, world, game, move)
+                else:
+                    if self.lookPartner(me, world, game, move) < pi/180:
+                        if me.get_distance_to_unit(world.puck) < game.stick_length:
+                            move.action = ActionType.TAKE_PUCK
 
 
     def getPuck(self, me, world, game, move):
@@ -70,8 +70,9 @@ class MyStrategy:
             move.turn = me.get_angle_to_unit(world.puck)
             move.speed_up = 1.0
 
-    def getToHitPosition(self, me, world, game, move, myAimX, myAimY):
-
+    def getToHitPosition(self, me, world, game, move):
+        myAimY = game.rink_top  if me.id == MyStrategy.top else game.rink_bottom
+        myAimX = (game.rink_left + game.rink_right) / 2
         distancePos = me.get_distance_to(myAimX,  myAimY)
 
         if distancePos > me.radius + 60:
@@ -92,31 +93,11 @@ class MyStrategy:
         move.turn = partnerAn
         return abs(partnerAn)
 
-    def lookNet(self, me, world, game, move):
-        opNetX = (world.get_opponent_player().net_left + world.get_opponent_player().net_right) / 2
-        opNetY = (world.get_opponent_player().net_bottom + world.get_opponent_player().net_top) / 2
-        opNetY += (0.5 if me.y < opNetY else -0.5) * game.goal_net_height;
-        move.turn = me.get_angle_to(opNetX, opNetY)
-        if abs(me.get_angle_to(opNetX, opNetY)) < pi/180:
-            move.action= ActionType.SWING
-            self.looks_on_aim = True
-
     def strikeNet(self, me, world, game, move):
         opNetX = (world.get_opponent_player().net_left + world.get_opponent_player().net_right) / 2
         opNetY = (world.get_opponent_player().net_bottom + world.get_opponent_player().net_top) / 2
         opNetY += (0.5 if me.y < opNetY else -0.5) * game.goal_net_height;
         move.turn = me.get_angle_to(opNetX, opNetY)
-
-        logging.warning("{} : {}".format(self.looks_on_aim, me.last_action_tick ))
+        move.action= ActionType.SWING
         if abs(me.get_angle_to(opNetX, opNetY)) < pi/180:
-
-            if self.looks_on_aim and me.last_action_tick > 20:
-                # move.action = ActionType.STRIKE
-                # self.looks_on_aim = False
-                self.cur_loop += 1
-            else:
-                move.action= ActionType.SWING
-                self.looks_on_aim = True
-
-            
-            
+            move.action = ActionType.STRIKE
